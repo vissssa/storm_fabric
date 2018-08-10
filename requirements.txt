@@ -1,0 +1,9 @@
+streamparse # always required for streamparse projects
+pika
+sqlalchemy
+mysql-connector
+nltk
+joblib
+scikit-learn==0.19.1
+numpy
+scipy
