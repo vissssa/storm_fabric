@@ -1,9 +1,9 @@
 storm.zookeeper.servers:
-    - "192.168.1.177"
-    - "192.168.1.179"
-    - "192.168.1.180"
+    - "192.168.1.168"
+    - "192.168.1.167"
+    - "192.168.1.166"
 storm.local.dir: "/home/123/Desktop/storm_data"
-nimbus.seeds: ["192.168.1.176"]
+nimbus.seeds: ["192.168.1.164"]
 supervisor.slots.ports:
     - 6700
     - 6701

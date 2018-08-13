@@ -5,39 +5,75 @@
 # @File    : fabfile.py
 # @Software: PyCharm
 from fabric.api import *
+from datetime import datetime
 
 env.user = 'root'
+# env.roledefs = {
+#     'zookeeper': ['root@192.168.1.177', 'root@192.168.1.179', 'root@192.168.1.180'],
+#     'zookeeper01': ['root@192.168.1.177'],
+#     'zookeeper02': ['root@192.168.1.179'],
+#     'zookeeper03': ['root@192.168.1.180'],
+#     'nimbus': ['root@192.168.1.176'],
+#     'supervisor01': ['root@192.168.1.178'],
+#     'supervisor02': ['root@192.168.1.181'],
+#     'storm': ['root@192.168.1.176', 'root@192.168.1.178', 'root@192.168.1.181'],
+#     'nimbus_noroot': ['123@192.168.1.176']
+# }
+#
+# # 需要注意的是，这里的host strings必须由username@host:port三部分构成，缺一不可，否则运行时还是会要求输入密码
+# env.passwords = {
+#     'root@192.168.1.177:22': '123123',
+#     'root@192.168.1.179:22': '123123',
+#     'root@192.168.1.180:22': '123123',
+#     'root@192.168.1.176:22': '123123',
+#     'root@192.168.1.178:22': '123123',
+#     'root@192.168.1.181:22': '123123',
+#     '123@192.168.1.176:22': '123'
+# }
+
+zookeeper01 = 'root@192.168.1.168'
+zookeeper02 = 'root@192.168.1.167'
+zookeeper03 = 'root@192.168.1.166'
+nimbus = 'root@192.168.1.164'
+nimbus_noroot = '123@192.168.1.164'
+supervisor01 = 'root@192.168.1.165'
+supervisor02 = 'root@192.168.1.163'
+
+local_dir = '/Users/zhangyu/PycharmProjects/fabric_test/local_dir'
+remote_dir = '/home/123/project_dpi'
+
 env.roledefs = {
-    'zookeeper': ['root@192.168.1.177', 'root@192.168.1.179', 'root@192.168.1.180'],
-    'zookeeper01': ['root@192.168.1.177'],
-    'zookeeper02': ['root@192.168.1.179'],
-    'zookeeper03': ['root@192.168.1.180'],
-    'nimbus': ['root@192.168.1.176'],
-    'supervisor01': ['root@192.168.1.178'],
-    'supervisor02': ['root@192.168.1.181'],
-    'storm': ['root@192.168.1.176', 'root@192.168.1.178', 'root@192.168.1.181'],
-    'nimbus_noroot': ['123@192.168.1.176']
+    'zookeeper': [zookeeper01, zookeeper02, zookeeper03],
+    'zookeeper01': [zookeeper01],
+    'zookeeper02': [zookeeper02],
+    'zookeeper03': [zookeeper03],
+    'nimbus': [nimbus],
+    'supervisor01': [supervisor01],
+    'supervisor02': [supervisor02],
+    'storm': [nimbus, supervisor01, supervisor02],
+    'nimbus_noroot': [nimbus_noroot]
 }
 
 # 需要注意的是，这里的host strings必须由username@host:port三部分构成，缺一不可，否则运行时还是会要求输入密码
 env.passwords = {
-    'root@192.168.1.177:22': '123123',
-    'root@192.168.1.179:22': '123123',
-    'root@192.168.1.180:22': '123123',
-    'root@192.168.1.176:22': '123123',
-    'root@192.168.1.178:22': '123123',
-    'root@192.168.1.181:22': '123123',
-    '123@192.168.1.176:22': '123'
+    '{}:22'.format(zookeeper01): '123123',
+    '{}:22'.format(zookeeper02): '123123',
+    '{}:22'.format(zookeeper03): '123123',
+    '{}:22'.format(nimbus): '123123',
+    '{}:22'.format(supervisor01): '123123',
+    '{}:22'.format(supervisor02): '123123',
+    '{}:22'.format(nimbus_noroot): '123'
 }
 
 
 @roles('zookeeper')
+@parallel
 def put_zookeeper():
-    put('/Users/zhangyu/Downloads/zookeeper/zookeeper-3.4.9.tar.gz', '/usr/local/zookeeper-3.4.9.tar.gz')
+    put('{}/zookeeper-3.4.9.tar.gz'.format(local_dir), '/usr/local/zookeeper-3.4.9.tar.gz')
     with cd('/usr/local'):
         run('tar -zxvf zookeeper-3.4.9.tar.gz')
         run('mv zookeeper-3.4.9 zookeeper')
-    put('/Users/zhangyu/PycharmProjects/fabric_test/zoo.cfg', '/usr/local/zookeeper/conf/zoo.cfg')
+    put('{}/zoo.cfg'.format(local_dir), '/usr/local/zookeeper/conf/zoo.cfg')
     run('iptables -I INPUT -m state --state NEW -p tcp --dport 2181 -j ACCEPT')
     run('iptables -I INPUT -m state --state NEW -p tcp --dport 2888 -j ACCEPT')
     run('iptables -I INPUT -m state --state NEW -p tcp --dport 3888 -j ACCEPT')
@@ -69,6 +105,7 @@ def myid3():
 
 
 @roles('zookeeper')
+@parallel
 def start_zkp():
     with cd('/usr/local/zookeeper'):
         run('bin/zkServer.sh start')
@@ -81,58 +118,77 @@ def status_zkp():
 
 
 def task_zkp():
+    with open('time.txt', 'a') as f:
+        f.write('zkp start: {} \n'.format(str(datetime.now())))
     execute(put_zookeeper)
     execute(myid1)
     execute(myid2)
     execute(myid3)
     execute(start_zkp)
-    execute(status_zkp)
+    # execute(status_zkp)
+    with open('time.txt', 'a') as f:
+        f.write('zkp end: {} \n'.format(str(datetime.now())))
 
 
 @roles('storm')
+@parallel
 def put_storm():
+    run('mkdir -p {} && chmod 777 {}'.format(remote_dir, remote_dir))
+    run('rm -rf /var/run/yum.pid')
     run('yum install java-1.8.0-openjdk -y')
-    put('/Users/zhangyu/Downloads/apache-storm-1.1.2.tar.gz', '/home/123/Desktop/apache-storm-1.1.2.tar.gz')
-    with cd('/home/123/Desktop'):
+    put('{}/apache-storm-1.1.2.tar.gz'.format(local_dir), '{}/apache-storm-1.1.2.tar.gz'.format(remote_dir))
+    with cd(remote_dir):
         run('tar zxvf apache-storm-1.1.2.tar.gz')
-        run('mkdir -p -p storm_data')
-    put('/Users/zhangyu/PycharmProjects/fabric_test/storm.yaml', '/home/123/Desktop/apache-storm-1.1.2/conf/storm.yaml')
+        run('mkdir -p storm_data')
+    put('{}/storm.yaml'.format(local_dir), '{}/apache-storm-1.1.2/conf/storm.yaml'.format(remote_dir))
 
 
 @roles('nimbus')
 def put_hostname_n():
-    run('''sed -i "6i storm.local.hostname: '192.168.1.176'" /home/123/Desktop/apache-storm-1.1.2/conf/storm.yaml''')
+    run('''sed -i "6i storm.local.hostname: '{}'" {}/apache-storm-1.1.2/conf/storm.yaml'''.format(
+        nimbus.replace('root@', ''), remote_dir))
 
 
 @roles('supervisor01')
 def put_hostname_s1():
-    run('''sed -i "6i storm.local.hostname: '192.168.1.178'" /home/123/Desktop/apache-storm-1.1.2/conf/storm.yaml''')
+    run('''sed -i "6i storm.local.hostname: '{}'" {}/apache-storm-1.1.2/conf/storm.yaml'''.format(
+        supervisor01.replace('root@', ''), remote_dir))
 
 
 @roles('supervisor02')
 def put_hostname_s2():
-    run('''sed -i "6i storm.local.hostname: '192.168.1.181'" /home/123/Desktop/apache-storm-1.1.2/conf/storm.yaml''')
+    run('''sed -i "6i storm.local.hostname: '{}'" {}/apache-storm-1.1.2/conf/storm.yaml'''.format(
+        supervisor02.replace('root@', ''), remote_dir))
 
 
 @roles('nimbus')
 def start_n():
-    run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm ui >/dev/null 2>&1 &) && sleep 1")
-    run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm nimbus >/dev/null 2>&1 &) && sleep 1")
+    run("$(nohup {}/apache-storm-1.1.2/bin/storm ui >/dev/null 2>&1 &) && sleep 1 "
+        "&& $(nohup {}/apache-storm-1.1.2/bin/storm nimbus >/dev/null 2>&1 &) && sleep 1"
+        "&& $(nohup {}/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1".format(remote_dir,
+                                                                                                    remote_dir,
+                                                                                                    remote_dir))
+    # run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm nimbus >/dev/null 2>&1 &) && sleep 1")
 
 
 @roles('supervisor01')
 def start_s1():
-    run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm supervisor >/dev/null 2>&1 &) && sleep 1")
-    run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1")
+    run("$(nohup {}/apache-storm-1.1.2/bin/storm supervisor >/dev/null 2>&1 &) && sleep 1 "
+        "&& $(nohup {}/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1".format(remote_dir,
+                                                                                                    remote_dir))
+    # run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1")
 
 
 @roles('supervisor02')
 def start_s2():
-    run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm supervisor >/dev/null 2>&1 &) && sleep 1")
-    run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1")
+    run("$(nohup {}/apache-storm-1.1.2/bin/storm supervisor >/dev/null 2>&1 &) && sleep 1 "
+        "&& $(nohup {}/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1".format(remote_dir,
+                                                                                                    remote_dir))
+    # run("$(nohup /home/123/Desktop/apache-storm-1.1.2/bin/storm logviewer >/dev/null 2>&1 &) && sleep 1")
 
 
 @roles('storm')
+@parallel
 def ip_storm():
     run('iptables -I INPUT -m state --state NEW -p tcp --dport 8000 -j ACCEPT')
     run('iptables -I INPUT -m state --state NEW -p tcp --dport 8080 -j ACCEPT')
@@ -152,6 +208,8 @@ def stop_storm():
 
 
 def task_storm():
+    with open('time.txt', 'a') as f:
+        f.write('storm start: {} \n'.format(str(datetime.now())))
     execute(put_storm)
     execute(put_hostname_n)
     execute(put_hostname_s1)
@@ -160,12 +218,16 @@ def task_storm():
     execute(start_n)
     execute(start_s1)
     execute(start_s2)
+    with open('time.txt', 'a') as f:
+        f.write('storm end: {} \n'.format(str(datetime.now())))
 
 
 @roles('storm')
+@parallel
 def put_python3():
-    put('/Users/zhangyu/Downloads/Python-3.6.6.tgz', '/home/123/Desktop/Python-3.6.6.tgz')
-    with cd('/home/123/Desktop'):
+    put('{}/Python-3.6.6.tgz'.format(local_dir), '{}/Python-3.6.6.tgz'.format(remote_dir))
+    with cd(remote_dir):
+        run('rm -rf /var/run/yum.pid')
         run('yum install zlib-devel bzip2-devel openssl-devel ncurese-devel gcc zlib sqlite-devel -y')
         run('tar zxvf Python-3.6.6.tgz')
         with cd('Python-3.6.6'):
@@ -175,30 +237,42 @@ def put_python3():
     run('ln -s /usr/local/python3/bin/pip3 /usr/bin/pip3')
     with cd('~/.config'):
         run('mkdir -p pip')
-        put('/Users/zhangyu/PycharmProjects/fabric_test/pip.conf', '~/.config/pip/pip.conf')
+        put('{}/pip.conf'.format(local_dir), '~/.config/pip/pip.conf')
     run('pip3 install virtualenv')
     run('''echo 'export PATH="$PATH:/usr/local/python3/bin"' >> /etc/profile''')
     run('source /etc/profile')
 
 
 @roles('storm')
+@parallel
 def update_glibc():
-    put('/Users/zhangyu/Downloads/glibc-2.17.tar.gz', '/home/123/Desktop/glibc-2.17.tar.gz')
-    with cd('/home/123/Desktop'):
-        run('tar -xvf glibc-2.17.tar.gz')
-        run('mkdir -p glibc_build_2.17')
-        with cd('glibc_build_2.17'):
-            run('../glibc-2.17/configure  --prefix=/usr --disable-profile --enable-add-ons --with-headers=/usr/include '
-                '--with-binutils=/usr/bin && make && make install')
+    # 找到新的快速升级方法
 
+    # put('/Users/zhangyu/Downloads/glibc-2.17.tar.gz', '/home/123/Desktop/glibc-2.17.tar.gz')
+    # with cd('/home/123/Desktop'):
+    #     run('tar -xvf glibc-2.17.tar.gz')
+    #     run('mkdir -p glibc_build_2.17')
+    #     with cd('glibc_build_2.17'):
+    #         run('../glibc-2.17/configure  --prefix=/usr --disable-profile --enable-add-ons --with-headers=/usr/include '
+    #             '--with-binutils=/usr/bin && make -j4 && make install')
 
-@roles('storm')
-def glibc():
+    put('{}/glibc-2.17-55.el6.x86_64.rpm'.format(local_dir),
+        '{}/glibc-2.17-55.el6.x86_64.rpm'.format(remote_dir))
+    put('{}/glibc-common-2.17-55.el6.x86_64.rpm'.format(local_dir),
+        '{}/glibc-common-2.17-55.el6.x86_64.rpm'.format(remote_dir))
+    put('{}/glibc-devel-2.17-55.el6.x86_64.rpm'.format(local_dir),
+        '{}/glibc-devel-2.17-55.el6.x86_64.rpm'.format(remote_dir))
+    put('{}/glibc-headers-2.17-55.el6.x86_64.rpm'.format(local_dir),
+        '{}/glibc-headers-2.17-55.el6.x86_64.rpm'.format(remote_dir))
+    put('{}/update_glibc.sh'.format(local_dir), '{}/update_glibc.sh'.format(remote_dir))
+    run('yum install kernel-headers -y')
+    with cd(remote_dir):
+        run('bash update_glibc.sh')
     run('strings /lib64/libc.so.6 | grep GLIBC')
-    run('strings /usr/lib64/libstdc++.so.6 | grep GLIBCXX')
 
 
 @roles('storm')
+@parallel
 def update_gcc():
     # 直接安装gcc-4.8.1会出现make error的情况， 所以我直接拿生成好的libstdc++so.6.18来替换
 
@@ -215,18 +289,24 @@ def update_gcc():
     #     '/usr/bin/gcc gcc /usr/local/bin/x86_64-unknown-linux-gnu-gcc-4.8.1 40')
     # run('/usr/sbin/update-alternatives --install /usr/bin/g++ g++ /usr/local/bin/g++ 40')
 
-    put('/Users/zhangyu/Downloads/libstdc++.so.6.0.18', '/usr/lib64/libstdc++.so.6.0.18')
+    put('{}/libstdc++.so.6.0.18'.format(local_dir), '/usr/lib64/libstdc++.so.6.0.18')
     with cd('/usr/lib64'):
         run('rm -rf libstdc++.so.6')
         run('ln -s libstdc++.so.6.0.18 libstdc++.so.6')
 
 
 def task_env():
+    with open('time.txt', 'a') as f:
+        f.write('env start: {} \n'.format(str(datetime.now())))
     execute(put_python3)
+    with open('time.txt', 'a') as f:
+        f.write('glibc start: {} \n'.format(str(datetime.now())))
     execute(update_glibc)
+    with open('time.txt', 'a') as f:
+        f.write('glibc end: {} \n'.format(str(datetime.now())))
     execute(update_gcc)
-    execute(glibc)
-    pass
+    with open('time.txt', 'a') as f:
+        f.write('env end: {} \n'.format(str(datetime.now())))
 
 
 @roles('nimbus_noroot')
@@ -241,48 +321,64 @@ def start_project():
     # run('lein')
 
     run('mkdir -p ~/bin')
-    put('/Users/zhangyu/Downloads/lein', '~/bin/lein')
+    put('{}/lein'.format(local_dir), '~/bin/lein')
     run('mkdir -p ~/.lein/self-installs')
-    put('/Users/zhangyu/Downloads/leiningen-2.8.1-standalone.jar',
+    put('{}/leiningen-2.8.1-standalone.jar'.format(local_dir),
         '~/.lein/self-installs/leiningen-2.8.1-standalone.jar')
     run('chmod a+x ~/bin/lein')
-    # run('lein -v')
 
     execute(pip)
     execute(nimbus_pip)
 
-    put('/Users/zhangyu/Developer/web_security/dpi_detection.zip', '~/Downloads/dpi_detection.zip')
-    with cd('~/Downloads'):
+    put('{}/dpi_detection.zip'.format(local_dir), '{}/dpi_detection.zip'.format(remote_dir))
+    with cd(remote_dir):
         run('unzip dpi_detection.zip')
         with cd('dpi_detection'):
             run('sparse submit')
 
 
 @roles('storm')
+@parallel
 def pip():
     # 安装python3所需要的包
-    put('/Users/zhangyu/PycharmProjects/fabric_test/requirements.txt', '/home/123/Desktop/requirements.txt')
-    run('pip3 install --upgrade pip')
+    put('{}/requirements.txt'.format(local_dir), '{}/requirements.txt'.format(remote_dir))
+    # run('pip3 install --upgrade pip')
     run('source /etc/profile && virtualenv /data/virtualenvs/dpi_detection')
-    put('/Users/zhangyu/Downloads/torch-0.4.1-cp36-cp36m-linux_x86_64.whl',
-        '/home/123/Desktop/torch-0.4.1-cp36-cp36m-linux_x86_64.whl')
-    run('source /data/virtualenvs/dpi_detection/bin/activate '
-        '&& pip3 install /home/123/Desktop/torch-0.4.1-cp36-cp36m-linux_x86_64.whl '
-        '&& pip3 install -r /home/123/Desktop/requirements.txt')
+    put('{}/torch-0.4.1-cp36-cp36m-linux_x86_64.whl'.format(local_dir),
+        '{}/torch-0.4.1-cp36-cp36m-linux_x86_64.whl'.format(remote_dir))
+    for i in range(0, 3):
+        try:
+            run('source /data/virtualenvs/dpi_detection/bin/activate '
+                '&& pip3 install {}/torch-0.4.1-cp36-cp36m-linux_x86_64.whl '
+                '&& pip3 install -r {}/requirements.txt'.format(remote_dir, remote_dir))
+        except:
+            pass
+        else:
+            break
     run('mkdir -p /var/log/storm/streamparse')
 
 
 @roles('nimbus')
 def nimbus_pip():
-    run('pip3 install --upgrade pip')
-    run('pip3 install /home/123/Desktop/torch-0.4.1-cp36-cp36m-linux_x86_64.whl')
-    run('pip3 install -r /home/123/Desktop/requirements.txt')
+    for i in range(0, 3):
+        try:
+            run('pip3 install --upgrade pip')
+            run('pip3 install {}/torch-0.4.1-cp36-cp36m-linux_x86_64.whl'.format(remote_dir))
+            run('pip3 install -r {}/requirements.txt'.format(remote_dir))
+        except:
+            pass
+        else:
+            break
     # run('yum install git -y')
     # run("echo '192.168.1.100 gitlab' >> /etc/hosts")
 
 
 def task_project():
+    with open('time.txt', 'a') as f:
+        f.write('project start: {} \n'.format(str(datetime.now())))
     execute(start_project)
+    with open('time.txt', 'a') as f:
+        f.write('project end: {} \n'.format(str(datetime.now())))
 
 
 def task():
@@ -290,3 +386,8 @@ def task():
     execute(task_storm)
     execute(task_env)
     execute(task_project)
+
+
+def glibc():
+    run('strings /lib64/libc.so.6 | grep GLIBC')
+    run('strings /usr/lib64/libstdc++.so.6 | grep GLIBCXX')
